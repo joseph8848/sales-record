@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sales Record — Daily Tracker</title>
+  <meta name="description" content="Record and track your daily sales across all devices" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="style.css?v=20" />
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#7c3aed" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Sales Record" />
+  <link rel="apple-touch-icon" href="icon-512.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+  <!-- Firebase compat SDKs (only loaded when needed) -->
+  <script src="firebase-config.js"></script>
+  <script>
+    if (window.FIREBASE_ENABLED) {
+      document.write('<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"><\/script>');
+      document.write('<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"><\/script>');
+      document.write('<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"><\/script>');
+    }
+  </script>
+</head>
+
+<body>
+
+  <!-- ═══════════════════════════════════════════
+     AUTH SCREEN
+════════════════════════════════════════════ -->
+  <div id="authScreen" class="auth-screen hidden">
+    <div class="auth-bg"></div>
+    <div class="auth-card">
+      <div class="auth-brand">
+        <div class="auth-logo">💰</div>
+        <h1>Sales Record</h1>
+        <p>Sign in to sync your data across all devices</p>
+      </div>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tabLogin" onclick="switchAuthTab('login')">Sign In</button>
+        <button class="auth-tab" id="tabSignup" onclick="switchAuthTab('signup')">Create Account</button>
+      </div>
+
+      <form id="authForm" onsubmit="handleAuth(event)">
+        <div id="signupNameRow" class="auth-field hidden">
+          <label>Your Name</label>
+          <input type="text" id="authName" placeholder="e.g. John Doe" autocomplete="name" />
+        </div>
+        <div class="auth-field">
+          <label>Email Address</label>
+          <input type="email" id="authEmail" placeholder="you@example.com" required autocomplete="email" />
+        </div>
+        <div class="auth-field">
+          <label>Password</label>
+          <input type="password" id="authPassword" placeholder="••••••••" required autocomplete="current-password"
+            minlength="6" />
+        </div>
+        <div class="auth-remember">
+          <label class="remember-label">
+            <input type="checkbox" id="rememberMe" checked />
+            <span>Remember me on this device</span>
+          </label>
+        </div>
+        <div id="authError" class="auth-error hidden"></div>
+        <button type="submit" class="auth-submit" id="authSubmitBtn">Sign In</button>
+      </form>
+
+      <div class="auth-local">
+        <span>─── or ───</span>
+        <button class="btn-ghost" onclick="useLocalMode()">Continue without sync (local only)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+     MAIN APP
+════════════════════════════════════════════ -->
+  <div id="app" class="hidden">
+
+    <!-- TOP NAVIGATION -->
+    <header class="topnav">
+      <div class="topnav-brand">
+        <div class="brand-logo">💰</div>
+        <div class="brand-text">
+          <span class="brand-name">Sales Record</span>
+          <span class="brand-tag" id="syncBadge">● Local</span>
+        </div>
+      </div>
+
+      <nav class="topnav-links" id="topNavLinks">
+        <button class="nav-btn active" data-page="dashboard" onclick="showPage('dashboard')">
+          <span class="nav-icon">📊</span><span class="nav-label">Dashboard</span>
+        </button>
+        <button class="nav-btn" data-page="expenses" onclick="showPage('expenses')">
+          <span class="nav-icon">🛍️</span><span class="nav-label">Stock & Expenses</span>
+        </button>
+        <button class="nav-btn" data-page="history" onclick="showPage('history')">
+          <span class="nav-icon">📋</span><span class="nav-label">History</span>
+        </button>
+        <button class="nav-btn" data-page="debt" onclick="showPage('debt')">
+          <span class="nav-icon">💳</span><span class="nav-label">Debt</span>
+        </button>
+        <button class="nav-btn" data-page="reports" onclick="showPage('reports')">
+          <span class="nav-icon">📈</span><span class="nav-label">Reports</span>
+        </button>
+      </nav>
+
+      <div class="topnav-right">
+        <button class="btn-install" id="installBtnTop" onclick="installPWA()" title="Install App">⬇️ <span class="install-label">Install</span></button>
+        <div class="user-pill" id="userPill">
+          <div class="user-avatar" id="userAvatar">?</div>
+          <span class="user-name" id="userName">Guest</span>
+        </div>
+        <button class="topbar-action-btn" id="logoutBtn" onclick="handleLogout()" title="Sign out">Sign Out</button>
+      </div>
+    </header>
+
+    <!-- MOBILE DROPDOWN NAV -->
+    <div class="mobile-nav hidden" id="mobileNav">
+      <button onclick="showPage('dashboard');toggleMobileNav()">📊 Dashboard</button>
+      <button onclick="showPage('expenses');toggleMobileNav()">🛍️ Stock &amp; Expenses</button>
+      <button onclick="showPage('history');toggleMobileNav()">📋 History</button>
+      <button onclick="showPage('debt');toggleMobileNav()">💳 Debt</button>
+      <button onclick="showPage('reports');toggleMobileNav()">📈 Reports</button>
+      <button id="installBtnMobile" onclick="installPWA();toggleMobileNav()">⬇️ Install App</button>
+      <button onclick="handleLogout()">⏏️ Sign Out</button>
+    </div>
+
+    <!-- BOTTOM TAB BAR (mobile only) -->
+    <div class="bottom-tab-bar" id="bottomTabBar">
+      <nav>
+        <button class="bottom-tab-btn active" data-page="dashboard" onclick="showPage('dashboard')">
+          <span class="tab-icon">📊</span>
+          <span class="tab-label">Dashboard</span>
+        </button>
+        <button class="bottom-tab-btn" data-page="expenses" onclick="showPage('expenses')">
+          <span class="tab-icon">🛍️</span>
+          <span class="tab-label">Stock</span>
+        </button>
+        <button class="bottom-tab-btn" data-page="history" onclick="showPage('history')">
+          <span class="tab-icon">📋</span>
+          <span class="tab-label">History</span>
+        </button>
+        <button class="bottom-tab-btn" data-page="debt" onclick="showPage('debt')">
+          <span class="tab-icon">💳</span>
+          <span class="tab-label">Debt</span>
+        </button>
+        <button class="bottom-tab-btn" data-page="reports" onclick="showPage('reports')">
+          <span class="tab-icon">📈</span>
+          <span class="tab-label">Reports</span>
+        </button>
+      </nav>
+    </div>
+
+    <!-- CONTENT AREA -->
+    <main class="content">
+
+      <!-- ═══ PAGE: DASHBOARD ═══ -->
+      <div id="page-dashboard" class="page active">
+
+        <!-- Stats strip -->
+        <div class="stats-strip">
+          <div class="stat-chip">
+            <div class="stat-chip-icon">🛒</div>
+            <div>
+              <div class="stat-chip-label">Total Sales</div>
+              <div class="stat-chip-val" id="sdSessionTotal">KES 0</div>
+            </div>
+          </div>
+          <div class="stat-chip">
+            <div class="stat-chip-icon">💸</div>
+            <div>
+              <div class="stat-chip-label">Total Expenses</div>
+              <div class="stat-chip-val" id="sdSessionExpenses">KES 0</div>
+            </div>
+          </div>
+          <div class="stat-chip">
+            <div class="stat-chip-icon">💰</div>
+            <div>
+              <div class="stat-chip-label">Net Profit</div>
+              <div class="stat-chip-val profit-val" id="sdSessionProfit">KES 0</div>
+            </div>
+          </div>
+          <div class="stat-chip stat-chip-amber">
+            <div class="stat-chip-icon">📦</div>
+            <div>
+              <div class="stat-chip-label">Remaining Stock</div>
+              <div class="stat-chip-val" id="sdRemaining">0 units</div>
+            </div>
+          </div>
+          <div class="stat-chip">
+            <div class="stat-chip-icon">💎</div>
+            <div>
+              <div class="stat-chip-label">All Time Sales</div>
+              <div class="stat-chip-val" id="sdAllTime">KES 0</div>
+            </div>
+          </div>
+          <div class="stat-chip stat-chip-rose">
+            <div class="stat-chip-icon">🔴</div>
+            <div>
+              <div class="stat-chip-label">Total Debt</div>
+              <div class="stat-chip-val" id="sdSessionDebt">KES 0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Session header -->
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">
+              Active Session
+              <span class="session-name-badge" id="sessionNameBadge">Loading...</span>
+            </h2>
+            <p class="section-sub">Enter items directly in the table — Tab to move between cells, Enter to add a new row
+            </p>
+          </div>
+          <div class="session-actions">
+            <button class="btn btn-ghost-sm" id="saveDraftBtn" onclick="saveDraft()">💾 Save</button>
+            <button class="btn btn-amber" onclick="confirmEndSession()">🔄 End Session</button>
+          </div>
+        </div>
+
+        <!-- INLINE ENTRY TABLE -->
+        <div class="table-wrapper">
+          <table class="entry-table" id="entryTable">
+            <thead>
+              <tr>
+                <th class="col-num">#</th>
+                <th class="col-item">Item / Product</th>
+                <th class="col-cat">Category</th>
+                <th class="col-open" title="Units carried over from yesterday">📦 Opening</th>
+                <th class="col-newstock" title="New stock received today">➕ New Stock</th>
+                <th class="col-qty">Qty Sold</th>
+                <th class="col-remain" title="Units left unsold">🔄 Remaining</th>
+                <th class="col-price">Selling Price</th>
+                <th class="col-total">Total</th>
+                <th class="col-paid">Paid</th>
+                <th class="col-debt">Debt</th>
+                <th class="col-pay">Payment</th>
+                <th class="col-cust">Customer / Note</th>
+                <th class="col-del"></th>
+              </tr>
+            </thead>
+            <tbody id="entryBody">
+              <!-- rows injected by JS -->
+            </tbody>
+            <tfoot>
+              <tr class="tfoot-row">
+                <td colspan="7" class="tfoot-label">Total Revenue</td>
+                <td colspan="2" class="tfoot-total" id="grandTotal">KES 0</td>
+                <td colspan="1" class="tfoot-paid" id="grandPaid">KES 0</td>
+                <td colspan="1" class="tfoot-debt" id="grandDebt">KES 0</td>
+                <td colspan="3">
+                  <button class="add-row-btn" onclick="addRow()">+ Add Row</button>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <div class="save-bar">
+          <span class="save-status" id="saveStatus">● Unsaved changes</span>
+          <button class="btn btn-teal" onclick="saveDraft()">💾 Save All</button>
+        </div>
+      </div>
+
+      <!-- ═══ PAGE: STOCK & EXPENSES ═══ -->
+      <div id="page-expenses" class="page">
+
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">
+              Stock & Expenses
+              <span class="session-name-badge" id="expSessionBadge">Loading...</span>
+            </h2>
+            <p class="section-sub">Record stock purchases, transport, wages, and all other costs — Tab to move between
+              cells</p>
+          </div>
+          <div class="session-actions">
+            <button class="btn btn-ghost-sm" onclick="saveExpenses()">💾 Save</button>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="entry-table" id="expTable">
+            <thead>
+              <tr>
+                <th class="col-num">#</th>
+                <th class="col-item">Item / Expense</th>
+                <th class="col-ecat">Category</th>
+                <th class="col-qty">Qty</th>
+                <th class="col-price">Unit Cost</th>
+                <th class="col-total">Total Cost</th>
+                <th class="col-cust">Notes</th>
+                <th class="col-del"></th>
+              </tr>
+            </thead>
+            <tbody id="expBody">
+              <!-- rows injected by JS -->
+            </tbody>
+            <tfoot>
+              <tr class="tfoot-row">
+                <td colspan="5" class="tfoot-label">Total Expenses</td>
+                <td class="tfoot-expense" id="grandExpense">KES 0</td>
+                <td colspan="2">
+                  <button class="add-row-btn" onclick="addExpenseRow()">+ Add Row</button>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <div class="save-bar">
+          <span class="save-status" id="expSaveStatus">● Unsaved changes</span>
+          <button class="btn btn-amber" onclick="saveExpenses()">💾 Save Expenses</button>
+        </div>
+      </div>
+
+      <!-- ═══ PAGE: HISTORY ═══ -->
+      <div id="page-history" class="page">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Sales History</h2>
+            <p class="section-sub">All archived sessions and their sales</p>
+          </div>
+          <div class="header-actions">
+            <input type="text" id="histSearch" class="search-box" placeholder="🔍 Search..."
+              oninput="renderHistory()" />
+            <button class="btn btn-teal" onclick="exportCSV()">⬇️ Export CSV</button>
+          </div>
+        </div>
+
+        <div class="filter-row">
+          <div class="filter-item">
+            <label>From</label>
+            <input type="date" id="hFrom" class="filter-input" onchange="renderHistory()" />
+          </div>
+          <div class="filter-item">
+            <label>To</label>
+            <input type="date" id="hTo" class="filter-input" onchange="renderHistory()" />
+          </div>
+          <div class="filter-item">
+            <label>Category</label>
+            <select id="hCat" class="filter-input" onchange="renderHistory()">
+              <option value="">All</option>
+              <option>General</option>
+              <option>Food &amp; Beverages</option>
+              <option>Clothing</option>
+              <option>Electronics</option>
+              <option>Services</option>
+              <option>Farming</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="filter-item">
+            <label>Payment</label>
+            <select id="hPay" class="filter-input" onchange="renderHistory()">
+              <option value="">All</option>
+              <option>Cash</option>
+              <option>Mpesa</option>
+              <option>Bank Transfer</option>
+              <option>Credit</option>
+            </select>
+          </div>
+          <button class="btn btn-ghost-sm" onclick="clearFilters()">✕ Clear</button>
+        </div>
+
+        <div id="historyContent"></div>
+      </div>
+
+      <!-- ═══ PAGE: DEBT ═══ -->
+      <div id="page-debt" class="page">
+
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">💳 Debt Tracker
+              <span class="session-name-badge" id="debtLiveBadge">All Sessions</span>
+            </h2>
+            <p class="section-sub">Track outstanding balances, mark payments, and manage customer credit</p>
+          </div>
+          <div class="header-actions">
+            <input type="text" id="debtSearch" class="search-box" placeholder="🔍 Search customer or item..." oninput="renderDebtPage()" />
+          </div>
+        </div>
+
+        <!-- Debt stat chips -->
+        <div class="debt-stats-strip">
+          <div class="debt-stat-chip debt-chip-rose">
+            <div class="stat-chip-icon">🔴</div>
+            <div>
+              <div class="stat-chip-label">Total Outstanding</div>
+              <div class="stat-chip-val" id="dTotalDebt">KES 0</div>
+            </div>
+          </div>
+          <div class="debt-stat-chip debt-chip-violet">
+            <div class="stat-chip-icon">👥</div>
+            <div>
+              <div class="stat-chip-label">Customers in Debt</div>
+              <div class="stat-chip-val" id="dTotalCustomers">0</div>
+            </div>
+          </div>
+          <div class="debt-stat-chip debt-chip-teal">
+            <div class="stat-chip-icon">✅</div>
+            <div>
+              <div class="stat-chip-label">Total Collected</div>
+              <div class="stat-chip-val" id="dTotalPaid">KES 0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filter row -->
+        <div class="filter-row" style="margin-bottom:16px">
+          <div class="filter-item">
+            <label>Session</label>
+            <select id="debtSessionFilter" class="filter-input" onchange="renderDebtPage()">
+              <option value="">All Sessions</option>
+            </select>
+          </div>
+          <div class="filter-item">
+            <label>Payment Type</label>
+            <select id="debtPayFilter" class="filter-input" onchange="renderDebtPage()">
+              <option value="">All</option>
+              <option>Cash</option>
+              <option>Mpesa</option>
+              <option>Bank Transfer</option>
+              <option>Credit</option>
+              <option>Split</option>
+            </select>
+          </div>
+          <button class="btn btn-ghost-sm" onclick="clearDebtFilters()">✕ Clear</button>
+        </div>
+
+        <!-- Debt table -->
+        <div class="table-wrapper" id="debtTableWrapper">
+          <table class="entry-table" id="debtTable" style="min-width:750px">
+            <thead>
+              <tr>
+                <th class="col-num">#</th>
+                <th class="col-item">Customer / Note</th>
+                <th class="col-item">Item</th>
+                <th class="col-cat">Session</th>
+                <th style="width:90px">Date</th>
+                <th style="width:110px">Sale Total</th>
+                <th style="width:110px">Paid</th>
+                <th style="width:120px">Outstanding</th>
+                <th style="width:130px">Pay Method</th>
+                <th style="width:200px">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="debtBody">
+              <!-- injected by JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Empty state -->
+        <div id="debtEmpty" class="empty hidden">
+          <div class="empty-icon">🎉</div>
+          <div class="empty-text">No outstanding debt!</div>
+          <div class="empty-sub">All customers are settled. Great work!</div>
+        </div>
+
+        <!-- Partial payment modal -->
+        <div id="partialModal" class="modal-overlay hidden">
+          <div class="modal">
+            <div class="modal-icon">💳</div>
+            <h3 class="modal-title">Record Partial Payment</h3>
+            <p class="modal-sub" id="partialModalSub">Enter how much the customer paid now:</p>
+            <input type="number" id="partialAmtInput" class="modal-input" placeholder="Amount paid (KES)" min="0" step="any" />
+            <div class="modal-actions">
+              <button class="btn btn-ghost-sm" onclick="closePartialModal()">Cancel</button>
+              <button class="btn btn-teal" onclick="confirmPartialPayment()">💾 Record Payment</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ═══ PAGE: REPORTS ═══ -->
+      <div id="page-reports" class="page">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Reports</h2>
+            <p class="section-sub">Performance insights across all your sessions</p>
+          </div>
+          <button class="btn btn-teal" onclick="exportCSV()">⬇️ Export CSV</button>
+        </div>
+
+        <div class="kpi-row">
+          <div class="kpi-card kpi-teal">
+            <div class="kpi-icon">🥇</div>
+            <div class="kpi-label">Best Day</div>
+            <div class="kpi-val" id="rBestDay">—</div>
+            <div class="kpi-sub" id="rBestDayAmt"></div>
+          </div>
+          <div class="kpi-card kpi-amber">
+            <div class="kpi-icon">📦</div>
+            <div class="kpi-label">Best Item</div>
+            <div class="kpi-val kpi-sm" id="rBestItem">—</div>
+            <div class="kpi-sub" id="rBestItemQ"></div>
+          </div>
+          <div class="kpi-card kpi-indigo">
+            <div class="kpi-icon">💳</div>
+            <div class="kpi-label">Top Payment</div>
+            <div class="kpi-val" id="rTopPay">—</div>
+            <div class="kpi-sub" id="rTopPayCt"></div>
+          </div>
+          <div class="kpi-card kpi-rose">
+            <div class="kpi-icon">📊</div>
+            <div class="kpi-label">Avg Sale</div>
+            <div class="kpi-val" id="rAvg">KES 0</div>
+            <div class="kpi-sub" id="rAvgCt"></div>
+          </div>
+        </div>
+
+        <div class="charts-row">
+          <div class="chart-card">
+            <h3 class="chart-title">Daily Sales — Last 7 Days</h3>
+            <div id="chartDaily"></div>
+          </div>
+          <div class="chart-card">
+            <h3 class="chart-title">Sales by Category</h3>
+            <div id="chartCategory"></div>
+          </div>
+        </div>
+
+        <div class="chart-card" style="margin-top:16px">
+          <h3 class="chart-title">Sales by Payment Method</h3>
+          <div id="chartPayment" class="payment-pills"></div>
+        </div>
+
+        <!-- ═══ DAILY SALES LOG ═══ -->
+        <div class="daily-log-section">
+          <div class="daily-log-header">
+            <h3 class="chart-title" style="margin:0">📅 Daily Sales Log</h3>
+            <p class="section-sub" style="margin-top:4px">Every session — items sold, remaining stock, and payments</p>
+          </div>
+          <div id="dailySalesLog"></div>
+        </div>
+
+        <!-- ═══ DANGER ZONE ═══ -->
+        <div class="danger-zone">
+          <div class="danger-zone-icon">⚠️</div>
+          <div class="danger-zone-text">
+            <div class="danger-zone-title">Danger Zone</div>
+            <div class="danger-zone-sub">Permanently delete all sessions, sales, expenses and debt records. This cannot be undone.</div>
+          </div>
+          <button class="btn-clear-all" onclick="confirmClearData()">🗑️ Clear All Data</button>
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ═══ END SESSION MODAL ═══ -->
+  <div id="endSessionModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-icon">🔄</div>
+      <h3 class="modal-title">End Current Session?</h3>
+      <p class="modal-sub">This will save and archive all current entries. Give this session a name before ending:</p>
+      <input type="text" id="sessionNameInput" class="modal-input" placeholder="e.g. Morning Sales — 12 Mar" />
+      <div class="modal-actions">
+        <button class="btn btn-ghost-sm" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-amber" onclick="endSession()">End &amp; Start New</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ CLEAR ALL DATA MODAL ═══ -->
+  <div id="clearDataModal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-icon">🗑️</div>
+      <h3 class="modal-title" style="color:#e11d48">Clear All Data?</h3>
+      <p class="modal-sub">This will <strong>permanently delete</strong> all sessions, sales, expenses and debt records. This cannot be undone.</p>
+      <p class="modal-sub" style="margin-top:-10px">Type <strong>DELETE</strong> to confirm:</p>
+      <input type="text" id="clearDataConfirmInput" class="modal-input" placeholder="Type DELETE here" />
+      <div class="modal-actions">
+        <button class="btn btn-ghost-sm" onclick="closeClearDataModal()">Cancel</button>
+        <button class="btn" style="background:linear-gradient(135deg,#be123c,#e11d48);color:#fff;box-shadow:0 4px 18px rgba(225,29,72,0.45)" onclick="executeClearData()">🗑️ Delete Everything</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ FIREBASE SETUP NOTICE ═══ -->
+  <div id="setupNotice" class="setup-notice hidden">
+    <div>
+      ☁️ <strong>Cloud sync not yet configured.</strong>
+      Your data is saved locally. Follow <strong>SETUP.md</strong> in the sales record folder to enable multi-device
+      sync.
+    </div>
+    <button onclick="document.getElementById('setupNotice').classList.add('hidden')">✕</button>
+  </div>
+
+  <script src="app.js"></script>
+
+  <!-- Service Worker Registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js')
+          .then(reg => console.log('SW registered:', reg.scope))
+          .catch(err => console.log('SW registration failed:', err));
+      });
+    }
+
+    // Install prompt — show custom install button if available
+    let deferredPrompt;
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      deferredPrompt = e;
+      const btn = document.getElementById('installBtn');
+      if (btn) btn.classList.remove('hidden');
+    });
+
+    function installApp() {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(() => {
+        deferredPrompt = null;
+        const btn = document.getElementById('installBtn');
+        if (btn) btn.classList.add('hidden');
+      });
+    }
+  </script>
+</body>
+
+</html>
